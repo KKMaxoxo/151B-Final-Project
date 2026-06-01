@@ -34,18 +34,15 @@ ADAPTER_DIR = "qwen_qlora_private_gpt_answer_only_adapter"
 QWEN_JSONL = "results/qwen_learned_gpt_private.jsonl"
 CSV_OUTPUT = "results/submission.csv"
 
-# Same as your run_inference.py
 INFER_MAX_NEW_TOKENS = 4096
 INFER_TEMPERATURE = 0.0
 INFER_TOP_P = 0.95
 INFER_MAX_INPUT_LENGTH = 8192
 
-# GPT settings from your run_gpt workflow
 GPT_MAX_OUTPUT_TOKENS = 32768
 GPT_SLEEP = 0.2
 GPT_RETRIES = 3
 
-# QLoRA training settings
 TRAIN_EPOCHS = 3
 TRAIN_MAX_SEQ_LENGTH = 4096
 TRAIN_BATCH_SIZE = 1
@@ -127,7 +124,6 @@ def force_boxed(response: str, is_mcq: bool) -> str:
 
 # ============================================================
 # STEP 1: GPT teacher generation
-# Prompt copied from run_gpt.py build_prompt(..., explain=False)
 # ============================================================
 
 def build_gpt_prompt(item: dict[str, Any], explain: bool = False) -> str:
@@ -202,7 +198,6 @@ def generate_gpt_teacher_answers(
         if len(existing) > 0:
             print(f"GPT answer file already exists: {output_path}")
             print(f"Existing rows: {len(existing)}")
-            # still resume if incomplete
     else:
         existing = []
 
@@ -258,7 +253,6 @@ def generate_gpt_teacher_answers(
 
 # ============================================================
 # STEP 2: Build teacher JSONL
-# Same logic as your notebook: question + teacher_response
 # ============================================================
 
 def build_teacher_jsonl(
@@ -288,7 +282,6 @@ def build_teacher_jsonl(
 
         response = r.get("response", "").strip()
 
-        # skip bad answers
         if not response:
             continue
         if "\\boxed{" not in response:
@@ -319,8 +312,6 @@ def build_teacher_jsonl(
 
 # ============================================================
 # STEP 3: Train QLoRA
-# The user/system prompt is copied from test_qlora.py build_messages(...)
-# We only add assistant=teacher_response for SFT.
 # ============================================================
 
 def build_qlora_messages_with_answer(item: dict[str, Any]) -> list[dict[str, str]]:
@@ -491,7 +482,6 @@ def train_qlora_adapter(
 
 # ============================================================
 # STEP 4: Qwen + QLoRA inference
-# Prompt copied exactly from test_qlora.py build_messages(...)
 # ============================================================
 
 def build_messages(item: dict[str, Any]) -> list[dict[str, str]]:
@@ -548,7 +538,6 @@ def force_boxed_if_needed(response: str, is_mcq: bool) -> str:
             return f"\\boxed{{{letter}}}"
         return response
 
-    # Do not wrap long unfinished reasoning into a box.
     return response
 
 
@@ -642,8 +631,6 @@ def run_qwen_qlora_inference(
 
 # ============================================================
 # STEP 5: CSV conversion
-# Matches the final run_inference.py behavior:
-# clean response, extract final boxed, save id,answer CSV.
 # ============================================================
 
 def jsonl_to_submission_csv(jsonl_path: str, csv_path: str) -> str:
@@ -698,7 +685,6 @@ def run_inference(
     if not Path(PRIVATE_PATH).exists():
         raise FileNotFoundError(f"Missing private data: {PRIVATE_PATH}")
 
-    # 1. GPT teacher generation
     if force_gpt or not Path(GPT_JSONL).exists():
         print("\n=== Step 1: GPT teacher generation ===")
         generate_gpt_teacher_answers(
@@ -709,7 +695,6 @@ def run_inference(
     else:
         print(f"\n=== Step 1 skipped: found {GPT_JSONL} ===")
 
-    # 2. Build teacher JSONL
     if force_teacher or not Path(TEACHER_JSONL).exists():
         print("\n=== Step 2: Build teacher JSONL ===")
         build_teacher_jsonl(
@@ -721,7 +706,6 @@ def run_inference(
     else:
         print(f"\n=== Step 2 skipped: found {TEACHER_JSONL} ===")
 
-    # 3. Train QLoRA adapter
     adapter_model = Path(ADAPTER_DIR) / "adapter_model.safetensors"
     adapter_config = Path(ADAPTER_DIR) / "adapter_config.json"
 
@@ -735,7 +719,6 @@ def run_inference(
     else:
         print(f"\n=== Step 3 skipped: found adapter in {ADAPTER_DIR} ===")
 
-    # 4. Run Qwen + QLoRA inference
     print("\n=== Step 4: Qwen + QLoRA inference ===")
     run_qwen_qlora_inference(
         data_path=PRIVATE_PATH,
@@ -745,7 +728,6 @@ def run_inference(
         temperature=INFER_TEMPERATURE,
     )
 
-    # 5. Convert to CSV
     print("\n=== Step 5: Convert JSONL to CSV ===")
     csv_path = jsonl_to_submission_csv(QWEN_JSONL, CSV_OUTPUT)
 
